@@ -1,0 +1,55 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main  # запускать при пуше в main
+
+jobs:
+  terraform:
+    name: Terraform apply
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init
+        run: terraform init ./iac  # укажи свою директорию с Terraform
+
+      - name: Terraform Apply
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: terraform apply -auto-approve ./iac
+
+  deploy_app:
+    name: Deploy Application
+    needs: terraform
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Deploy via SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ec2-user@${EC2_HOST} << 'EOF'
+            cd /home/ec2-user/app  # путь до директории проекта на EC2
+            git pull origin main   # получаем последние изменения
+            docker-compose down || true
+            docker-compose up -d --build
+          EOF
