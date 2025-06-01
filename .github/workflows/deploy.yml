@@ -8,38 +8,22 @@ on:
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-east-1
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v2
 
-      # Provide AWS credentials to all relevant Terraform steps
-      # (init, plan, and apply typically need them)
       - name: Terraform Init
         run: terraform -chdir=iac init
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1 # Or set in provider block
-
-      - name: Terraform Validate
-        run: terraform -chdir=iac validate
-        # Validate usually doesn't need credentials if no remote state/providers are involved,
-        # but including them doesn't hurt.
 
       - name: Terraform Plan
         run: terraform -chdir=iac plan -var-file="terraform.tfvars"
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
 
       - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
         run: terraform -chdir=iac apply -auto-approve -var-file="terraform.tfvars"
-        # Corrected: Removed the duplicate 'env:' keyword
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
