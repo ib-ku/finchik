@@ -27,6 +27,7 @@ jobs:
       - name: Terraform Apply
         run: terraform -chdir=iac apply -auto-approve -var-file="terraform.tfvars"
         env:
-          AWS_ACCESS_KEY_ID: AKIAZLYD32DA4DZ6LQ5S
-          AWS_SECRET_ACCESS_KEY: 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
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
