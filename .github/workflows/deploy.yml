@@ -2,90 +2,61 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
-  build:
+  # 🧩 Code Integration Stage
+  lint-and-format:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js (example for JS/TS projects)
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: 18
 
-      - name: Install Dependencies
-        run: npm install
+      - name: Run ESLint
+        run: npm ci && npm run lint
 
-      - name: Build
-        run: npm run build
+      - name: Run Prettier Check
+        run: npm run format:check
 
-  unit-test:
-    needs: build
+  # 🧪 Testing Stage
+  test:
     runs-on: ubuntu-latest
+    needs: lint-and-format
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: 18
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run Unit Tests
-        run: npm test
-
-  integration-test:
-    needs: unit-test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
-      - name: Install Dependencies
-        run: npm install
+        run: npm run test:unit
 
       - name: Run Integration Tests
         run: npm run test:integration
 
-  acceptance-test:
-    needs: integration-test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
-      - name: Install Dependencies
-        run: npm install
-
       - name: Run Acceptance Tests
         run: npm run test:acceptance
 
+  # ⚙️ Terraform Infrastructure Validation
   terraform:
-    needs: acceptance-test
     runs-on: ubuntu-latest
+    needs: test
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -105,6 +76,25 @@ jobs:
 
       - name: Terraform Plan
         run: terraform -chdir=iac plan -var-file="terraform.tfvars"
+
+  # 🚀 Deployment Stage
+  deploy:
+    runs-on: ubuntu-latest
+    needs: terraform
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Apply
         run: terraform -chdir=iac apply -auto-approve -var-file="terraform.tfvars"
