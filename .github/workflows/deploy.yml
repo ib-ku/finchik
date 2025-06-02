@@ -1,50 +1,110 @@
-name: Deploy to AWS
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  terraform:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-        # Используйте v4 для последних обновлений и исправлений безопасности
-        # uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+  unit-test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Unit Tests
+        run: npm test
+
+  integration-test:
+    needs: unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Integration Tests
+        run: npm run test:integration
+
+  acceptance-test:
+    needs: integration-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Acceptance Tests
+        run: npm run test:acceptance
+
+  terraform:
+    needs: acceptance-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
       - name: Configure AWS credentials
-        # Это действие устанавливает учетные данные AWS для всех последующих шагов в этом задании.
-        # Оно является предпочтительным способом аутентификации в AWS в GitHub Actions.
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1 # Укажите ваш регион AWS здесь
+          aws-region: us-east-1
 
       - name: Setup Terraform
-        # Это действие устанавливает Terraform CLI в среде выполнения.
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        # Инициализирует рабочий каталог Terraform.
-        # -chdir=iac указывает, что файлы Terraform находятся в подкаталоге 'iac'.
         run: terraform -chdir=iac init
 
       - name: Terraform Validate
-        # Проверяет синтаксис и конфигурацию Terraform.
         run: terraform -chdir=iac validate
 
       - name: Terraform Plan
-        # Генерирует и отображает план выполнения Terraform.
-        # -var-file="terraform.tfvars" использует переменные из указанного файла.
         run: terraform -chdir=iac plan -var-file="terraform.tfvars"
 
       - name: Terraform Apply
-        # Применяет изменения, определенные в плане Terraform.
-        # -auto-approve автоматически подтверждает применение без запроса.
-        # Будьте осторожны с -auto-approve в production-средах.
-        # Переменные окружения AWS теперь устанавливаются действием 'Configure AWS credentials' выше,
-        # поэтому их не нужно явно указывать здесь.
         run: terraform -chdir=iac apply -auto-approve -var-file="terraform.tfvars"
